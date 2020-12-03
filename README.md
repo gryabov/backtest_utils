@@ -21,7 +21,7 @@ $  pip3 install -r requirements.txt
 ## How to run
 
 ```shell script
-$  pyton3 chart.py
+$  python3 chart.py
 ```
 
 Than File -> open (for instance AMD.csv ) and press `Calculate`  button
