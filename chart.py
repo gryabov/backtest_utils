@@ -16,7 +16,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.initConnections()
         pg.setConfigOptions(foreground=finplot.foreground, background=finplot.background)
         fp = finplot.FinWindow(title="chart")
-        self.ax = finplot.create_plot_widget(fp, init_zoom_periods=100)
+        self.ax = finplot.create_plot_widget(fp, init_zoom_periods=500)
         fp.ci.addItem(self.ax, row=0, col=0)
         fp.show_maximized = True
         self.plotWidget.setMaximumHeight(0)
@@ -49,10 +49,9 @@ class MainWindow(QtWidgets.QMainWindow):
         return quotes[['DateTime', 'Open', 'Close', 'High', 'Low']]
 
     def updateCandleItems(self, quotes):
-        if not self.candleItems:
-            self.candleItems = finplot.candlestick_ochl(quotes)
-        else:
-            self.candleItems.update_data(quotes)
+        self.ax.reset()
+        finplot.candlestick_ochl(quotes)
+        finplot.refresh()
 
     def updatePlot(self):
         if self.isFileFirstOpen:
@@ -115,7 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def update_legend_text(self, x, y):
         if self.df is not None:
-            row = self.df.loc[self.df['DateTime'] == pd.to_datetime(pd.Timestamp(x * 1000000).floor('min'), utc=True)]
+            row = self.df.loc[self.df['DateTime'] == pd.to_datetime(pd.Timestamp(x).floor('min'), utc=True)]
             if not row.empty:
                 rawText = '<span style="font-size:13px">%s</span> &nbsp; O %s C %s H %s L %s'
                 ticker = self.filename.split(sep="/")[-1].split(".")[0]
