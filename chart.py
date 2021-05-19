@@ -48,10 +48,12 @@ class MainWindow(QtWidgets.QMainWindow):
         quotes.reset_index(inplace=True)
         return quotes[['DateTime', 'Open', 'Close', 'High', 'Low']]
 
-    def updateCandleItems(self, quotes):
+    def updateCandlePane(self, quotes):
         self.ax.reset()
         finplot.candlestick_ochl(quotes)
         finplot.refresh()
+        self.hoverLabel = finplot.add_legend('', ax=self.ax)
+        finplot.set_time_inspector(self.update_legend_text, ax=self.ax, when='hover')
 
     def updatePlot(self):
         if self.isFileFirstOpen:
@@ -69,7 +71,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.statusbar.showMessage('')
 
             quotes = self.calculateQuotes(start_date, end_date)
-            self.updateCandleItems(quotes)
+            self.updateCandlePane(quotes)
 
             fromTimestamp = quotes['DateTime'].min()
             toTimestamp = quotes['DateTime'].max()

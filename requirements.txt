@@ -1,5 +1,4 @@
-git+git://github.com/highfestiva/finplot/@174bdfdfd408f05df0d480269d759037ed30884c
-
+finplot==1.7
 numpy==1.20.3
 pandas==1.2.4
 PyQt5==5.15.4
