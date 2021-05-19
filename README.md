@@ -13,9 +13,11 @@ $ brew install python
 $  pip3 install -r requirements.txt
 ```
 
-3.. Install IB Gateway from https://www.interactivebrokers.co.uk/en/index.php?f=16896
+Only if you want to fetch history data from IB:
+ 
+1.. Install IB Gateway from https://www.interactivebrokers.co.uk/en/index.php?f=16896
 
-4.. Before run open the IB Gateway and log in your IB account
+2.. Before run open the IB Gateway and log in your IB account
 
 
 ## How to run
