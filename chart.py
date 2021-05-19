@@ -8,8 +8,72 @@ from PyQt5 import QtWidgets, uic
 from dateutil.tz import gettz
 
 
-class MainWindow(QtWidgets.QMainWindow):
+class EntryStopLine:
+    def __init__(self):
+        pass
 
+    def redraw(self, df, entryPrice, stopPrice, fromTimestamp, toTimestamp):
+        y_max = df['High'].max()
+        y_min = df['Low'].min()
+        int_step = (y_max - y_min) / 100
+        first_intersection = None
+
+        self._redrawEntryPointLine(entryPrice, fromTimestamp, toTimestamp)
+        if entryPrice:
+            first_intersection = self._drawEntryPriceIntersection(df, entryPrice, first_intersection, int_step)
+
+        self._redrawStopLossLine(stopPrice, fromTimestamp, toTimestamp)
+        if stopPrice and first_intersection is not None:
+            self._drawStopPriceIntersection(df, first_intersection, stopPrice, y_max, y_min)
+
+    def _drawStopPriceIntersection(self, df, first_intersection, stopPrice, y_max, y_min):
+        price = float(stopPrice)
+        stop_df = df[df['DateTime'] > first_intersection['DateTime']]
+        intersections = stop_df[self._ochlIntersectionMask(stop_df, price)]
+        intersections.reset_index(inplace=True)
+        size = len(intersections)
+        if size > 0:
+            candle = intersections.iloc[0]
+            finplot.add_line((candle['DateTime'], y_min), (candle['DateTime'], y_max),
+                             color='f7ff00', interactive=False, width=3)
+
+    def _drawEntryPriceIntersection(self, df, entryPrice, first_intersection, int_step):
+        price = float(entryPrice)
+        intersections = df[self._ochlIntersectionMask(df, price)]
+        intersections.reset_index(inplace=True)
+        size = len(intersections)
+        if size > 0:
+            first_intersection = intersections.iloc[0]
+            candle = intersections.iloc[0]
+            finplot.add_line((candle['DateTime'], price + int_step), (candle['DateTime'], price - int_step),
+                             color='9900ff', interactive=False, width=3)
+        return first_intersection
+
+    def _redrawEntryPointLine(self, price: str, fromTimestamp, toTimestamp):
+        self._redrawLine(price, fromTimestamp, toTimestamp, '9900ff')
+
+    def _redrawStopLossLine(self, price: str, fromTimestamp, toTimestamp):
+        self._redrawLine(price, fromTimestamp, toTimestamp, 'ff0000')
+
+    def _redrawLine(self, priceText: str, fromTimestamp, toTimestamp, color: str):
+        if priceText:
+            price = float(priceText)
+            finplot.add_line((fromTimestamp, price), (toTimestamp, price), color=color, interactive=False)
+
+    def _span(self, l, r, value):
+        return (l >= value) & (r <= value)
+
+    def _ochlIntersectionMask(self, df, value):
+        o = df['Open']
+        c = df['Close']
+        h = df['High']
+        l = df['Low']
+        return self._span(h, o, value) | self._span(h, c, value) \
+               | self._span(o, c, value) | self._span(c, o, value) \
+               | self._span(o, l, value) | self._span(c, l, value)
+
+
+class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         uic.loadUi('chart.ui', self)
@@ -23,14 +87,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plotWidget.axs = [self.ax]  # finplot requires this property
         self.verticalLayout.addWidget(fp)
         self.dayDateEdit.setDate(datetime.date.today())
-        self.priceLine = None
-        self.stopPriceLine = None
         self.candleItems = None
         self.df = None
         self.filename = None
         self.isFileFirstOpen = True
+        self.esLines= EntryStopLine()
         self.hoverLabel = finplot.add_legend('', ax=self.ax)
-        finplot.set_time_inspector(self.update_legend_text, ax=self.ax, when='hover')
+        finplot.set_time_inspector(self.updateLegend, ax=self.ax, when='hover')
         finplot.display_timezone = gettz('America/New_York')
 
     def initConnections(self):
@@ -53,7 +116,7 @@ class MainWindow(QtWidgets.QMainWindow):
         finplot.candlestick_ochl(quotes)
         finplot.refresh()
         self.hoverLabel = finplot.add_legend('', ax=self.ax)
-        finplot.set_time_inspector(self.update_legend_text, ax=self.ax, when='hover')
+        finplot.set_time_inspector(self.updateLegend, ax=self.ax, when='hover')
 
     def updatePlot(self):
         if self.isFileFirstOpen:
@@ -75,9 +138,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
             fromTimestamp = quotes['DateTime'].min()
             toTimestamp = quotes['DateTime'].max()
-
-            self.redrawEntryPointLine(fromTimestamp, toTimestamp)
-            self.redrawStopLossLine(fromTimestamp, toTimestamp)
+            entryPrice = self.priceLineEdit.text()
+            stopPrice = self.stopPriceEdit.text()
+            self.esLines.redraw(quotes, entryPrice, stopPrice, fromTimestamp, toTimestamp)
 
         else:
             self.statusbar.showMessage(f'No record for {start_date.day_name()}: {start_date}')
@@ -92,29 +155,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def isDfHasDate(self, date: datetime) -> bool:
         return (self.df['DateTime'].dt.date == date).any()
 
-    def redrawEntryPointLine(self, fromTimestamp, toTimestamp):
-        priceText = self.priceLineEdit.text()
-        self._redrawLine(self.priceLine, priceText, fromTimestamp, toTimestamp, '9900ff')
-
-    def redrawStopLossLine(self, fromTimestamp, toTimestamp):
-        priceText = self.stopPriceEdit.text()
-        self._redrawLine(self.stopPriceLine, priceText, fromTimestamp, toTimestamp, 'ff0000')
-
-    def _redrawLine(self, line, priceText: str, fromTimestamp, toTimestamp, color: str):
-        if line:
-            finplot.remove_line(line)
-
-        if priceText:
-            price = float(priceText)
-            line = finplot.add_line((fromTimestamp, price), (toTimestamp, price), color=color, interactive=False)
-
     def loadData(self, filename: str):
         df = pd.read_csv(filename, usecols=['DateTime', 'Open', 'High', 'Low', 'Close'], na_values=['nan'])
         df['DateTime'] = pd.to_datetime(df['DateTime'], utc=True)
         df.reset_index(inplace=True)
         return df
 
-    def update_legend_text(self, x, y):
+    def updateLegend(self, x, y):
         if self.df is not None:
             row = self.df.loc[self.df['DateTime'] == pd.to_datetime(pd.Timestamp(x).floor('min'), utc=True)]
             if not row.empty:
